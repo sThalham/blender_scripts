@@ -1,7 +1,7 @@
 import os,sys
 import bpy
 import numpy as np
-import transform3d as tf3d
+import transforms3d as tf3d
 from random import randint
 from random import random
 from random import gauss
@@ -11,52 +11,27 @@ import yaml
 import itertools
 from math import radians,degrees,tan,cos
 from numpy.linalg import inv
+import OpenEXR, Imath
 
+import bmesh
+from mathutils import Vector
+from bpy_extras.object_utils import world_to_camera_view
 
-def getVisibleBoundingBox(objectPassIndex):
-
-    S = bpy.context.scene
-    width  = int( S.render.resolution_x * S.render.resolution_percentage / 100 )
-    height = int( S.render.resolution_y * S.render.resolution_percentage / 100 )
-    depth  = 4
-
-    pixels = np.array( bpy.data.images['Render Result'].pixels[:] ).reshape( [height, width, depth] )
-    # Keep only one value for each pixel (white pixels have 1 in all RGBA channels anyway), thus converting the image to black and white
-    pixels = np.array( [ [ pixel[0] for pixel in row ] for row in pixels ] )
-
-    bbox = np.argwhere( pixels == objectPassIndex )
-    (ystart, xstart), (ystop, xstop) = bbox.min(0), bbox.max(0) + 1
-    bb = (xstart, xstart, height - ystart, height - ystop)
-    return bb, bbox
-
+print("Starting script")
 
 base_dir = "/home/sthalham/data/LINEMOD/models_stl"
 gt_dir = "/home/sthalham/data/renderings/linemod_BG"
 sample_dir = '/home/sthalham/data/renderings/linemod_crops' #directory for temporary files (cam_L, cam_R, masks..~)
 target_dir = '/home/sthalham/data/renderings/linemod_crops/patches'
-depPath = root + "/depth/"
-partPath = root + "/part/"
-gtPath = root
-maskPath = root + "/mask/"
+depPath = gt_dir + "/depth/"
+partPath = gt_dir + "/part/"
+gtPath = gt_dir
+maskPath = gt_dir + "/mask/"
 
 index=0
-isfile=True
-#while isfile:
-#    prefix='{:08}_'.format(index)
-#    if(os.path.exists(os.path.join(target_dir,prefix+'gt.yaml'))):
-#        index+=1
-#    else:
-#        isfile=False
 
 if not(os.path.exists(target_dir+"/depth")):
     os.makedirs(target_dir+"/depth")
-
-if not(os.path.exists(target_dir+"/mask")):
-    os.makedirs(target_dir+"/mask")
-
-if not(os.path.exists(target_dir+"/part")):
-    os.makedirs(target_dir+"/part")
-
 
 model_file=[]
 model_solo=[]
@@ -68,13 +43,28 @@ for root, dirs, files in os.walk(base_dir):
              model_solo.append(file)
              #print(len(model_file),temp_fn)
 
+print(gtPath)
+counter = 0
+
 for gt in os.listdir(gtPath):
     if not gt.endswith(".yaml"):
         continue
+    gt_count = gt[:8]
+    contFlag = True
+    for cr in os.listdir(target_dir + '/depth'):
+        cr_count = cr[:8]
+        if cr_count == gt_count:
+            contFlag = False
+            continue
+    if contFlag == False:
+        print('Continue!')
+        continue
+    
+    counter += 1
     
     gtfile = gtPath +'/' + gt
-    
-    with open(fn_gt, 'r') as stream:
+
+    with open(gtfile, 'r') as stream:
         query = yaml.load(stream)
         bboxes = np.zeros((len(query), 5), np.int)
         poses = np.zeros((len(query), 7), np.float32)
@@ -90,8 +80,11 @@ for gt in os.listdir(gtPath):
             q_pose = tf3d.quaternions.mat2quat(pose[:3, :3])
             poses[j, :4] = np.array(q_pose)
             poses[j, 4:7] = np.array([pose[0, 3], pose[1, 3], pose[2, 3]])
+    
+    object_label =[]
+    anchor_pose = np.zeros((6))
             
-    for i, bb in enumerate(bboxes[:-1]:
+    for i, bb in enumerate(bboxes[:-1]):
     
         bpy.ops.object.select_all(action='DESELECT')
         scene = bpy.context.scene
@@ -110,34 +103,48 @@ for gt in os.listdir(gtPath):
         obj_object = bpy.data.objects["template"]
         obj_object.pass_index = 1
         mat = obj_object.active_material
-    
-        file_model = model_file[bboxes[0]]
+        
+        file_model = model_file[bboxes[i][0]]
+        solo_model = model_solo[bboxes[i][0]]
         imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=root)
-        object_label.append(file_idx)
+        object_label.append(bboxes[0][0])
         obj_object = bpy.context.selected_objects[0]
         obj_object.active_material = mat
         obj_object.pass_index = i +2 # don't add?
-        anchor_pose[i,0] = poses[i, 4]
-        anchor_pose[i,1] = poses[i, 5]
-        anchor_pose[i,2] = poses[i, 6]
-        rot = tf3d.euler.quat2euler(poses[i, 0:4)
-        anchor_pose[i,3] = rot[0
-        anchor_pose[i,4] = rot[1]
-        anchor_pose[i,5] = rot[2]
+        anchor_pose[0] = poses[i, 4]
+        anchor_pose[1] = poses[i, 5]
+        anchor_pose[2] = poses[i, 6]
+        rot = tf3d.euler.quat2euler(poses[i, 0:4])
+        anchor_pose[3] = rot[0]
+        anchor_pose[4] = rot[1]
+        anchor_pose[5] = rot[2]
     
+        #bpy.ops.rigidbody.object_settings_copy()
+        scene.frame_set(0)
+        for obj in scene.objects:
+            if obj.type == 'MESH':
+                obj_object= bpy.data.objects[obj.name]
+            
+            if obj_object.pass_index>1:
+                idx = obj_object.pass_index -2
+                obj_object.location.x=anchor_pose[0]
+                obj_object.location.y=anchor_pose[1]
+                obj_object.location.z=anchor_pose[2]
+                obj_object.rotation_euler.x= anchor_pose[3]
+                obj_object.rotation_euler.y= anchor_pose[4]
+                obj_object.rotation_euler.z= anchor_pose[5]
+                 
+                # assign different color
+                rand_color = (random(), random(), random())
+                obj_object.active_material.diffuse_color = rand_color
+                if obj_object.pass_index > 1:
+                    obj_object.pass_index = 0
                 
         tree = bpy.context.scene.node_tree
         nodes = tree.nodes
-	    #When Rander cam_L, render mask together
 
-        prefix='{:08}_'.format(index)
-        index+=1
-        # if(index>10000):
-        # break
-
-        maskfile = os.path.join(target_dir+'/mask' , 'mask.png')
-        depthfile = os.path.join(target_dir+'/depth', prefix+'depth.exr')
-        partfile= os.path.join(target_dir+"/part", prefix+'part.png')
+        crop_name = gt[:-8] + '_' + str(bboxes[i][0]) + '_depth.exr'
+        depthfile = os.path.join(target_dir+'/depth', crop_name)
 
         for ob in scene.objects:
             if ob.type == 'CAMERA':          
@@ -146,188 +153,40 @@ for gt in os.listdir(gtPath):
                     bpy.context.scene.camera = ob
                     print('Set camera %s for IR' % ob.name )
                     file_L = os.path.join(sample_dir , ob.name )
-                    auto_file = os.path.join(sample_dir, ob.name+'0061.png')
-                    node= nodes['maskout']
-                    node.file_slots[0].path = ob.name
-                    node_mix = nodes['ColorRamp']
-                    link_mask= tree.links.new(node_mix.outputs["Image"], node.inputs[0])
-                    node.base_path=sample_dir                  
-                  
-                    auto_file_depth = os.path.join(sample_dir+'/temp/', ob.name+'0061.exr')
+                    
+                    auto_file_depth = os.path.join(sample_dir+'/temp/', ob.name+'0000.exr')
                     node= nodes['depthout']
                     node.file_slots[0].path = ob.name
                     node_mix = nodes['Render Layers']
                     link_depth = tree.links.new(node_mix.outputs["Z"], node.inputs[0])
                     node.base_path=sample_dir+'/temp/'
-                    
-                  
-                    auto_file_part = os.path.join(sample_dir+'/temp/', ob.name+'0061.png')
-                    node= nodes['rgbout']
-                    node.file_slots[0].path = ob.name
-                    node_mix = nodes['Render Layers']
-                    link_part = tree.links.new(node_mix.outputs["Diffuse Color"], node.inputs[0])
-                    link_part = tree.links.new(node_mix.outputs["Image"], node.inputs[0])
-                    node.base_path=sample_dir+'/temp/'
                   
                     scene.render.filepath = file_L
                     bpy.ops.render.render( write_still=True )
-                    tree.links.remove(link_mask)
                     tree.links.remove(link_depth)
-                    tree.links.remove(link_part)
                   
-                    os.rename(auto_file, maskfile)
                     os.rename(auto_file_depth, depthfile)
-                    os.rename(auto_file_part, partfile)
 
-        mask = cv2.imread(maskfile)
+        pt = Imath.PixelType(Imath.PixelType.FLOAT)
+        golden = OpenEXR.InputFile(depthfile)
+        dw = golden.header()['dataWindow']
+        size = (dw.max.x - dw.min.x + 1, dw.max.y - dw.min.y + 1)
+        redstr = golden.channel('R', pt)
+        depth = np.fromstring(redstr, dtype=np.float32)
+        depth.shape = (size[1], size[0])
 
-        minmax_vu = np.zeros((num_object+5,4),dtype=np.int) #min v, min u, max v, max u
-        label_vu = np.zeros((mask.shape[0],mask.shape[1]),dtype=np.int8) #min v, min u, max v, max u
-        colors = np.zeros((num_object+5,3),dtype=mask.dtype)
+        centerX = depth.shape[1] / 2.0
+        centerY = depth.shape[0] / 2.0
+        fov = 57.8
 
-        n_label=0
+        uv_table = np.zeros((depth.shape[0], depth.shape[1], 2), dtype=np.int16)
+        column = np.arange(0, depth.shape[0])
+        uv_table[:, :, 1] = np.arange(0, depth.shape[1]) - centerX
+        uv_table[:, :, 0] = column[:, np.newaxis] - centerY
+        uv_table = np.abs(uv_table)
 
-        color_index=np.array([  [  0, 0,   0],
-						[  0, 100,   0],
-						[  0, 139,   0],
-						[  0, 167,   0],
-						[  0, 190,   0],
-						[  0, 210,   0],
-						[  0, 228,   0],
-						[  0, 244,   0],
-						[  0, 252,  50],
-						[  0, 236, 112],
-						[  0, 220, 147],
-						[  0, 201, 173],
-						[  0, 179, 196],
-						[  0, 154, 215],
-						[  0, 122, 232],
-						[  0,  72, 248],
-						[ 72,   0, 248],
-						[122,   0, 232],
-						[154,   0, 215],
-						[179,   0, 196],
-						[201,   0, 173],
-						[220,   0, 147],
-						[236,   0, 112],
-						[252,   0,  50],
-						[255,  87,  87],
-						[255, 131, 131],
-						[255, 161, 161],
-						[255, 185, 185],
-						[255, 206, 206],
-						[255, 224, 224],
-						[255, 240, 240],
-						[255, 255, 255]])
-
-
-        for v in np.arange(mask.shape[0]):
-            for u in np.arange(mask.shape[1]):
-                has_color = False
-                if not(mask[v,u,0] ==0 and mask[v,u,1] ==0 and mask[v,u,2] ==0):
-                    for ob_index in np.arange(n_label):
-                        if colors[ob_index,0]== mask[v,u,0] and colors[ob_index,1]== mask[v,u,1] and colors[ob_index,2]== mask[v,u,2]:
-                            has_color = True
-                            minmax_vu[ob_index,0] = min(minmax_vu[ob_index,0], v)
-                            minmax_vu[ob_index,1] = min(minmax_vu[ob_index,1], u)
-                            minmax_vu[ob_index,2] = max(minmax_vu[ob_index,2], v)
-                            minmax_vu[ob_index,3] = max(minmax_vu[ob_index,3], u)
-                            label_vu[v,u]=ob_index+1
-                            continue
-                    if has_color ==False: #new label
-                        colors[n_label] = mask[v,u]
-                        label_vu[v,u]=n_label+1 #identical to object_index in blender
-                        minmax_vu[n_label,0] = v
-                        minmax_vu[n_label,1] = u
-                        minmax_vu[n_label,2] = v
-                        minmax_vu[n_label,3] = u
-                        n_label=n_label+1
-                else:
-	       	        label_vu[v,u]=0
-
-
-        bbox_refined = mask
-        color_map=np.zeros(n_label)
-
-        for k in np.arange(n_label)  :
-            for i in np.arange(color_index.shape[0]):
-                if(color_index[i,0] == colors[k,0] and color_index[i,1] == colors[k,1] and color_index[i,2] == colors[k,2] ):
-                 color_map[k]=i
-                 continue
-
-        object_no=[]
-        refined=[]
-
-        for ob_index in np.arange(n_label): #np.arange(n_label):
-            min_v=minmax_vu[ob_index,0]
-            min_u=minmax_vu[ob_index,1]
-            max_v=minmax_vu[ob_index,2]
-            max_u=minmax_vu[ob_index,3]
-            bbox = label_vu[min_v:max_v,min_u:max_u]
-            bbox=bbox.reshape(-1)
-            counts = np.bincount(bbox)
-            #print(colors[ob_index])
-            if(counts.shape[0]>1):
-                if(np.argmax(counts[1:]) ==(ob_index)): #(mask.shape[0],mask.shape[1]
-                #if(min_v>30 and min_u>30 and max_v < (mask.shape[0]-30) and max_u < (mask.shape[1]-30) ):
-    	        #cv2.rectangle(bbox_refined,(min_u,min_v),(max_u,max_v),(0,255,0),1)
-                    refined.append(ob_index)
-                    object_no.append(color_map[ob_index])
-    		        #print(color_map[ob_index])
-
-      # cv2.imwrite(os.path.join(target_dir,prefix+'bbox_refined.png'),bbox_refined)
-        bbox_refined = minmax_vu[refined]
-        poses =np.zeros((len(object_no),4,4),dtype=np.float)
-        camera_rot =np.zeros((4,4),dtype=np.float)
-        for obj in scene.objects:
-            if obj.type == 'MESH':
-                if obj.pass_index in object_no:
-                    idx = object_no.index(obj.pass_index)
-                    poses[idx]=obj.matrix_world
-                if obj.name=='InvisibleCube':
-                    camera_rot[:,:] = obj.matrix_world
-                    camera_rot = camera_rot[:3,:3] #only rotation (z was recorded seprately)
-                    init_rot = np.zeros((3,3))
-                    init_rot[0,0]=1
-                    init_rot[1,1]=-1
-                    init_rot[2,2]=-1
-                    fin_rot =np.matmul(camera_rot,init_rot)
-                    fin_rot = inv(fin_rot)
-                    world_rot=np.zeros((4,4))
-                    world_rot[:3,:3] = fin_rot
-                    world_rot[3,3]=1
-            if obj.type == 'CAMERA' and  obj.name=='cam_L':
-                obj_object = bpy.data.objects[obj.name]
-                camera_z = obj_object.location.z
-                #camera_ext[:,:] = obj_object.matrix_world
-                #camera_ext = camera_ext.reshape(-1)
-
-        np.save(target_dir+"/mask/"+prefix+"mask.npy",label_vu)
-        cam_trans = -np.matmul(camera_rot,np.array([0,0,camera_z]))
-        world_trans =np.zeros((4,4))
-        world_trans[0,0]=1
-        world_trans[1,1]=1
-        world_trans[2,2]=1
-        world_trans[3,3]=1
-        world_trans[:3,3] = cam_trans
-
-        masksT = []
-        boxesT = []
-        #camOrientation = np.array(bpy.data.objects['cam_L'].matrix_world).reshape(-1)
-        camOrientation =np.zeros((4,4),dtype=np.float)
-        camOrientation[3,3]=1.0
-        camOrientation[:3,3] = cam_trans
-        camOrientation[:3,:3] = world_rot[:3,:3]
-        camOrientation = np.linalg.inv(camOrientation)
-        with open(os.path.join(target_dir,prefix+'gt.yaml'),'w') as f:
-            camOri={'camera_rot':camOrientation.tolist()}
-            yaml.dump(camOri,f)
-            for i in np.arange(len(object_no)):
-                pose = poses[i]
-                pose = np.matmul(world_trans,pose)
-                pose = np.matmul(world_rot,pose)
-                pose_list=pose.reshape(-1)
-                id = int(object_label[int(object_no[i]-2)])
-                mask_id = int(refined[i]+1)
-                gt={int(i):{'bbox':bbox_refined[i].tolist(),'class_id':id,'mask_id':mask_id,'pose':pose_list.tolist()}} #,'camera_z':camera_z,'camera_rot':camera_rot.tolist()
-                yaml.dump(gt,f)
+        depth = depth * np.cos(np.radians(fov / depth.shape[1] * np.abs(uv_table[:, :, 1]))) * np.cos(
+        np.radians(fov / depth.shape[1] * uv_table[:, :, 0]))
+    
+        depth[depth == np.inf] = 0
+    
