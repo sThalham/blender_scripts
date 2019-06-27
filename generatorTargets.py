@@ -21,8 +21,10 @@ print("Starting script")
 
 base_dir = "/home/sthalham/data/LINEMOD/models_stl"
 gt_dir = "/home/sthalham/data/renderings/linemod_BG"
-sample_dir = '/home/sthalham/data/renderings/linemod_crops' #directory for temporary files (cam_L, cam_R, masks..~)
-target_dir = '/home/sthalham/data/renderings/linemod_crops/patches'
+#sample_dir = '/home/sthalham/data/renderings/linemod_crops' #directory for temporary files (cam_L, cam_R, masks..~)
+#target_dir = '/home/sthalham/data/renderings/linemod_crops/patches'
+sample_dir = '/home/sthalham/Documents/OEAGM2019/crops_SyDD'
+target_dir = '/home/sthalham/Documents/OEAGM2019/crops_SyDD/patches'
 depPath = gt_dir + "/depth/"
 partPath = gt_dir + "/part/"
 gtPath = gt_dir
@@ -46,7 +48,9 @@ for root, dirs, files in os.walk(base_dir):
 print(gtPath)
 counter = 0
 
-for gt in os.listdir(gtPath):
+#for gt in os.listdir(gtPath):
+for gt in range(0,1):
+    '''
     if not gt.endswith(".yaml"):
         continue
     gt_count = gt[:8]
@@ -61,6 +65,7 @@ for gt in os.listdir(gtPath):
         continue
     
     counter += 1
+    
     
     gtfile = gtPath +'/' + gt
 
@@ -83,9 +88,12 @@ for gt in os.listdir(gtPath):
     
     object_label =[]
     anchor_pose = np.zeros((6))
+    '''
             
-    for i, bb in enumerate(bboxes[:-1]):
+    #for i, bb in enumerate(bboxes[:-1]):
+    for i in range(0,1):
     
+        '''
         bpy.ops.object.select_all(action='DESELECT')
         scene = bpy.context.scene
         scene.objects.active = bpy.data.objects["template"]
@@ -142,10 +150,12 @@ for gt in os.listdir(gtPath):
                 
         tree = bpy.context.scene.node_tree
         nodes = tree.nodes
-
-        crop_name = gt[:-8] + '_' + str(bboxes[i][0]) + '_depth.exr'
+        '''
+        #crop_name = gt[:-8] + '_' + str(bboxes[i][0]) + '_depth.exr'
+        crop_name = '0033_depth.exr'
         depthfile = os.path.join(target_dir+'/depth', crop_name)
 
+        
         for ob in scene.objects:
             if ob.type == 'CAMERA':          
                 if ob.name=='cam_L': #ob.name =='mask':

@@ -119,11 +119,11 @@ def getVisibleBoundingBox(objectPassIndex):
 # b = 0.0075
 
 base_dir = "/home/sthalham/data/LINEMOD/models_stl_red"
-back_dir = "/home/sthalham/data/CAD_stl/rnd"
-total_set = 50000 #10000 set of scenes, each set has identical objects with varied poses to anchor pose (+-15)
+back_dir = "/home/sthalham/data/CAD_stl/many"
+total_set = 1 #10000 set of scenes, each set has identical objects with varied poses to anchor pose (+-15)
 pair_set = 1 #number of pair scene for each set, 10
-sample_dir = '/home/sthalham/data/renderings/linemod_BG' #directory for temporary files (cam_L, cam_R, masks..~)
-target_dir = '/home/sthalham/data/renderings/linemod_BG/patches'
+sample_dir = '/home/sthalham/data/renderings/linemod_debug' #directory for temporary files (cam_L, cam_R, masks..~)
+target_dir = '/home/sthalham/data/renderings/linemod_debug/patches'
 index=0
 isfile=True
 while isfile:
@@ -216,10 +216,27 @@ for num_set in np.arange(total_set):
     obj_object = bpy.data.objects["template"]
     obj_object.pass_index = 1
     mat = obj_object.active_material
-
-    # FOR BACKGROUND OBJECTS
     
-    drawBack = list(range(10,12))
+    # memory is leaking
+    # that should fix it
+    for block in bpy.data.meshes:
+        if block.users == 0:
+            bpy.data.meshes.remove(block)
+
+    for block in bpy.data.materials:
+        if block.users == 0:
+            bpy.data.materials.remove(block)
+
+    for block in bpy.data.textures:
+        if block.users == 0:
+            bpy.data.textures.remove(block)
+
+    for block in bpy.data.images:
+        if block.users == 0:
+            bpy.data.images.remove(block)
+
+    # FOR BACKGROUND OBJECTS    
+    drawBack = list(range(10,15))
     freqBack= np.bincount(drawBack)
     BackDraw = np.random.choice(np.arange(len(freqBack)), 1, p=freqBack / len(drawBack), replace=False)
     BackObj = list(range(1,len(back_file)))
@@ -255,10 +272,10 @@ for num_set in np.arange(total_set):
         anchor_pose[i,1] = random()*0.5-0.25
         #anchor_pose[i,2] = 0.4 + 0.2*float(i)
         anchor_pose[i,2] = 0.1 + random()*0.2
-        #anchor_pose[i,3] =radians(random()*360.0) #0-360 degree
-        #anchor_pose[i,4] =radians(random()*360.0)
-        anchor_pose[i,3] = 0.0
-        anchor_pose[i,4] = 0.0
+        anchor_pose[i,3] =radians(random()*360.0) #0-360 degree
+        anchor_pose[i,4] =radians(random()*360.0)
+        #anchor_pose[i,3] = 0.0
+        #anchor_pose[i,4] = 0.0
         anchor_pose[i,5] =radians(random()*360.0)
         
     print("FOREGROUND IMPORTED")
@@ -335,8 +352,12 @@ for num_set in np.arange(total_set):
     bpy.ops.rigidbody.object_settings_copy()
   
     #Define Object position&rotation
+    
     for iii in np.arange(pair_set):
 
+        tree = bpy.context.scene.node_tree
+        nodes = tree.nodes
+        ind_obj_counter = 0
         scene.frame_set(0)
         for obj in scene.objects:
             print("position object: ", obj)
@@ -350,8 +371,8 @@ for num_set in np.arange(total_set):
                 obj_object.location.z=anchor_pose[idx,2]
                 #obj_object.rotation_euler.x= radians(random()*360.0) #anchor_pose[idx,3] + radians(random()*30.0-15.0)
                 #obj_object.rotation_euler.y= radians(random()*360.0) #anchor_pose[idx,4] + radians(random()*30.0-15.0)
-                obj_object.rotation_euler.x= 0.0 
-                obj_object.rotation_euler.y= 0.0 
+                obj_object.rotation_euler.x= radians(random()*360.0)
+                obj_object.rotation_euler.y= radians(random()*360.0)
                 obj_object.rotation_euler.z= radians(random()*360.0)
                  
                 # assign different color
@@ -383,7 +404,7 @@ for num_set in np.arange(total_set):
 
             if obj.type == 'CAMERA' and  obj.name=='cam_L':
                 obj_object = bpy.data.objects[obj.name]
-                obj_object.location.z = random()*0.8+0.65  #1.0-2.5
+                obj_object.location.z = random()+0.8  #1.0-2.5
                 
         print("start running physics")    
 
@@ -408,15 +429,88 @@ for num_set in np.arange(total_set):
 
         prefix='{:08}_'.format(index)
         index+=1
-        #if(index>10000):
-        # break
+        
+        # render individual object mask
+        scene = bpy.context.scene
+        scene.objects.active = bpy.data.objects["template"]
+        for obj in scene.objects:
+            if obj.type == 'MESH':
+                #print("objects parsed: ", obj)
+                if obj.name == 'template':
+                    obj.select = False
+                elif obj.name[0:5] == 'Plane':
+                    obj.select = False
+                elif obj.name == 'Plane':
+                    obj.select = False
+                elif obj.name == 'InvisibleCube':
+                    obj.select = False
+                elif obj.name == 'Laptop':
+                    obj.select = False
+                elif obj.name == 'Screen':
+                    obj.select = False
+                elif obj.name[0:7] == 'Speaker':
+                    obj.select = False
+                elif obj.name == 'Mouse':
+                    obj.select = False
+                elif obj.name == 'Keyboard':
+                    obj.select = False
+                elif obj.name == 'Lamp1':
+                    obj.select = False
+                elif obj.name == 'Monitor2':
+                    obj.select = False
+                elif obj.name == 'Pot':
+                    obj.select = False
+                elif obj.name == 'Potplant':
+                    obj.select = False
+                elif obj.name == 'Basket':
+                    obj.select = False
+                else:
+                    obj.select = True
+                    
+        ind_obj_counter = 0
+       
+        for nr, obj in enumerate(bpy.context.selected_objects):
+            for ijui9, o_hide in enumerate(bpy.context.selected_objects):
+                o_hide.hide_render = True
+            obj.hide_render = False
+            img_name = str(ind_obj_counter) + '.png'
+            ind_mask_file = os.path.join(sample_dir, img_name)
+            for ob in scene.objects:
+                if ob.type == 'CAMERA':
+                    if ob.name=='cam_L': #ob.name =='mask':
+                        #Render IR image and Mask
+                        bpy.context.scene.camera = ob
+                        print('Set camera %s for IR' % ob.name )
+                        file_L = os.path.join(sample_dir , ob.name )
+                        print(file_L)
+                        img_name = str(ind_obj_counter) + '.png'
+                        auto_file = os.path.join(sample_dir, ob.name+'0061.png')
+                        print(auto_file)
+                        node= nodes['maskout']
+                        node.file_slots[0].path = ob.name
+                        node_mix = nodes['ColorRamp']
+                        link_mask= tree.links.new(node_mix.outputs["Image"], node.inputs[0])
+                        node.base_path=sample_dir
+                            
+                        scene.render.filepath = file_L
+                        bpy.ops.render.render( write_still=True )
+                        tree.links.remove(link_mask)
+                            
+                        os.rename(auto_file, indmaskfile)
+                            
+                        ind_obj_counter += 1
+
+        for ijui9, o_hide in enumerate(bpy.context.selected_objects):
+            o_hide.hide_render = False
 
         maskfile = os.path.join(target_dir+'/mask' , 'mask.png')
         depthfile = os.path.join(target_dir+'/depth', prefix+'depth.exr')
         partfile= os.path.join(target_dir+"/part", prefix+'part.png')
 
+        #ind_mask_counter = 0
         #for ob in scene.objects:
         #    if ob.type == 'MESH':
+        #        if obj_object.pass_index>1 and obj_object.pass_index <= (num_object+1):
         #        if ob.name == 'InvisibleCube' or ob.name == 'template':
         #            continue
         #        obj_object= bpy.data.objects[ob.name]
@@ -429,7 +523,6 @@ for num_set in np.arange(total_set):
             if ob.type == 'CAMERA':          
                 if ob.name=='cam_L': #ob.name =='mask':
                     #Render IR image and Mask
-                    print("line 373")
                     bpy.context.scene.camera = ob
                     print('Set camera %s for IR' % ob.name )
                     file_L = os.path.join(sample_dir , ob.name )
@@ -438,8 +531,7 @@ for num_set in np.arange(total_set):
                     node.file_slots[0].path = ob.name
                     node_mix = nodes['ColorRamp']
                     link_mask= tree.links.new(node_mix.outputs["Image"], node.inputs[0])
-                    node.base_path=sample_dir          
-                    print("line 383")        
+                    node.base_path=sample_dir                 
                   
                     auto_file_depth = os.path.join(sample_dir+'/temp/', ob.name+'0061.exr')
                     node= nodes['depthout']
@@ -447,7 +539,6 @@ for num_set in np.arange(total_set):
                     node_mix = nodes['Render Layers']
                     link_depth = tree.links.new(node_mix.outputs["Z"], node.inputs[0])
                     node.base_path=sample_dir+'/temp/'
-                    print("line 391")
                   
                     auto_file_part = os.path.join(sample_dir+'/temp/', ob.name+'0061.png')
                     node= nodes['rgbout']
@@ -462,7 +553,6 @@ for num_set in np.arange(total_set):
                     tree.links.remove(link_mask)
                     tree.links.remove(link_depth)
                     tree.links.remove(link_part)
-                    print("line 373")
                   
                     os.rename(auto_file, maskfile)
                     os.rename(auto_file_depth, depthfile)
@@ -555,6 +645,7 @@ for num_set in np.arange(total_set):
             bbox = label_vu[min_v:max_v,min_u:max_u]
             bbox=bbox.reshape(-1)
             counts = np.bincount(bbox)
+            print('counts: ', counts)
             #print(colors[ob_index])
             if(counts.shape[0]>1):
                 if(np.argmax(counts[1:]) ==(ob_index)): #(mask.shape[0],mask.shape[1]
@@ -564,7 +655,7 @@ for num_set in np.arange(total_set):
                     object_no.append(color_map[ob_index])
                     #print(color_map[ob_index])
 
-      # cv2.imwrite(os.path.join(target_dir,prefix+'bbox_refined.png'),bbox_refined)
+        cv2.imwrite(os.path.join(target_dir,'bbox_refined.png'),bbox_refined)
         bbox_refined = minmax_vu[refined]
         poses =np.zeros((len(object_no),4,4),dtype=np.float)
         camera_rot =np.zeros((4,4),dtype=np.float)
@@ -618,6 +709,7 @@ for num_set in np.arange(total_set):
                 pose_list=pose.reshape(-1)
                 id = int(object_label[int(object_no[i]-2)])
                 mask_id = int(refined[i]+1)
+                print(id, bbox_refined[i])
                 gt={int(i):{'bbox':bbox_refined[i].tolist(),'class_id':id,'mask_id':mask_id,'pose':pose_list.tolist()}} #,'camera_z':camera_z,'camera_rot':camera_rot.tolist()
                 yaml.dump(gt,f)
     
