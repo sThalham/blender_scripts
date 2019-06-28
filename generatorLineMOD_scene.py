@@ -369,6 +369,24 @@ for num_set in np.arange(total_set):
     print("BACKGROUND objects set to inactive for physics")
     
     # randomize lights and position
+    light_numbers = list(range(2,8))
+    light_number = np.bincount(light_numbers)
+    lights = np.random.choice(np.arange(len(light_number)), 1, p=light_number / len(light_numbers), replace=False)
+    lights = np.asscalar(lights)
+    
+    for lamp in range(1, lights):
+        lamp_types = ('POINT', 'SPOT', 'HEMI', 'AREA')
+        lamp_type = random.choice(lamp_types)
+        print('lamp_type: ', lamp_type)
+        lamp_name = 'lamp_' + str(lamp)
+        lamp_position = ((random()*5.0-2.5), (random()*5.0-2.5), (random()*2.0+2)
+        
+        lamp_data = bpy.data.lamps.new(name=lamp_name, type=lamp_type)
+        lamp_object = bpy.data.objects.new(name=lamp_name, object_data=lamp_data)
+        scene.objects.link(lamp_object)
+        lamp_object.location = lamp_position
+        lamp_object.select = True
+        scene.objects.active = lamp_object
 
     bpy.ops.rigidbody.object_settings_copy()
   
