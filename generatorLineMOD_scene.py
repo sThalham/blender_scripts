@@ -120,7 +120,8 @@ def getVisibleBoundingBox(objectPassIndex):
 # f = 580
 # b = 0.0075
 
-base_dir = "/home/sthalham/data/LINEMOD/models_stl_red_13"
+#base_dir = "/home/sthalham/data/LINEMOD/models_stl_red_13"
+base_dir = "/home/sthalham/data/LINEMOD/models_ori_13"
 back_dir = "/home/sthalham/data/CAD_stl/many"
 total_set = 1 #10000 set of scenes, each set has identical objects with varied poses to anchor pose (+-15)
 pair_set = 1 #number of pair scene for each set, 10
@@ -148,13 +149,16 @@ if not(os.path.exists(target_dir+"/mask")):
 
 if not(os.path.exists(target_dir+"/part")):
     os.makedirs(target_dir+"/part")
+    
+if not(os.path.exists(target_dir+"/rgb")):
+    os.makedirs(target_dir+"/rgb")
 
 
 model_file=[]
 model_solo=[]
 for root, dirs, files in os.walk(base_dir):
     for file in sorted(files):
-        if file.endswith(".stl"):
+        if file.endswith(".ply"):
              temp_fn =os.path.join(root, file)
              model_file.append(temp_fn)
              model_solo.append(file)
@@ -212,6 +216,8 @@ for num_set in np.arange(total_set):
                 obj.select = False
             else:
                 obj.select = True
+        if obj.name[0:6] == 'light_':
+            obj.select = True
 
     bpy.ops.object.delete()
     bpy.ops.object.select_all(action='DESELECT')
@@ -275,8 +281,8 @@ for num_set in np.arange(total_set):
         file_idx = Rchoice(idxF)
         file_model = model_file[file_idx]
         solo_model = model_solo[file_idx]
-        imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=root)
-        #imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=root)
+        #imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=root)
+        imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=root)
         object_label.append(file_idx)
         obj_object = bpy.context.selected_objects[0]
         obj_object.active_material = mat
@@ -327,6 +333,8 @@ for num_set in np.arange(total_set):
  
     # FOR BACKGROUND OBJECTS 
     print("BACKGROUND IMPORTED")
+    
+    #bpy.data.worlds["World"].light_settings.use_ambient_occlusion = True
   
     #Set object physics
     scene = bpy.context.scene
@@ -367,26 +375,6 @@ for num_set in np.arange(total_set):
     
     
     print("BACKGROUND objects set to inactive for physics")
-    
-    # randomize lights and position
-    light_numbers = list(range(2,8))
-    light_number = np.bincount(light_numbers)
-    lights = np.random.choice(np.arange(len(light_number)), 1, p=light_number / len(light_numbers), replace=False)
-    lights = np.asscalar(lights)
-    
-    for lamp in range(1, lights):
-        lamp_types = ('POINT', 'SPOT', 'HEMI', 'AREA')
-        lamp_type = random.choice(lamp_types)
-        print('lamp_type: ', lamp_type)
-        lamp_name = 'lamp_' + str(lamp)
-        lamp_position = ((random()*5.0-2.5), (random()*5.0-2.5), (random()*2.0+2)
-        
-        lamp_data = bpy.data.lamps.new(name=lamp_name, type=lamp_type)
-        lamp_object = bpy.data.objects.new(name=lamp_name, object_data=lamp_data)
-        scene.objects.link(lamp_object)
-        lamp_object.location = lamp_position
-        lamp_object.select = True
-        scene.objects.active = lamp_object
 
     bpy.ops.rigidbody.object_settings_copy()
   
@@ -515,8 +503,10 @@ for num_set in np.arange(total_set):
         for nr, obj in enumerate(bpy.context.selected_objects):
             for ijui9, o_hide in enumerate(bpy.context.selected_objects):
                 o_hide.hide_render = True
-            if obj.name[0:3] == 'Obj':
+            print(obj.name)
+            if obj.name[0:3] == 'obj':
                 obj.hide_render = False
+                print(obj)
                 img_name = obj.name + '.png'
                 ind_mask_file = os.path.join(sample_dir, img_name)
                 for ob in scene.objects:
@@ -550,6 +540,7 @@ for num_set in np.arange(total_set):
         maskfile = os.path.join(target_dir+'/mask' , 'mask.png')  # correspondence mask
         depthfile = os.path.join(target_dir+'/depth', prefix+'depth.exr') # depth image
         partfile= os.path.join(target_dir+"/part", prefix+'part.png')   # visibility mask
+        rgbfile= os.path.join(target_dir+"/rgb", prefix+'rgb.png')   # rgb image
 
         for ob in scene.objects:
             if ob.type == 'CAMERA':          
@@ -558,7 +549,8 @@ for num_set in np.arange(total_set):
                     bpy.context.scene.camera = ob
                     print('Set camera %s for IR' % ob.name )
                     file_L = os.path.join(sample_dir , ob.name )
-                    auto_file = os.path.join(sample_dir, ob.name+'0061.png')
+                    
+                    auto_file = os.path.join(sample_dir, ob.name+'0061.png')  
                     node= nodes['maskout']
                     node.file_slots[0].path = ob.name
                     node_mix = nodes['ColorRamp']
@@ -579,16 +571,47 @@ for num_set in np.arange(total_set):
                     link_part = tree.links.new(node_mix.outputs["Diffuse Color"], node.inputs[0])
                     link_part = tree.links.new(node_mix.outputs["Image"], node.inputs[0])
                     node.base_path=sample_dir+'/temp/'
+
+                    auto_file_rgb = os.path.join(sample_dir+'/rgb/', ob.name+'0061.png')
+                    node= nodes['rgbimage.001']
+                    node.file_slots[0].path = ob.name
+                    node_mix = nodes['Render Layers']
+                    link_rgb = tree.links.new(node_mix.outputs["Diffuse Color"], node.inputs[0])
+                    #link_rgb = tree.links.new(node_mix.outputs["Image"], node.inputs[0])
+                    node.base_path=sample_dir+'/rgb/'
                   
                     scene.render.filepath = file_L
                     bpy.ops.render.render( write_still=True )
                     tree.links.remove(link_mask)
                     tree.links.remove(link_depth)
                     tree.links.remove(link_part)
+                    tree.links.remove(link_rgb)
                   
                     os.rename(auto_file, maskfile)
                     os.rename(auto_file_depth, depthfile)
                     os.rename(auto_file_part, partfile)
+                    os.rename(auto_file_rgb, rgbfile)
+                    
+        # randomize lights and position
+        light_numbers = list(range(3,8))
+        light_number = np.bincount(light_numbers)
+        lights = np.random.choice(np.arange(len(light_number)), 1, p=light_number / len(light_numbers), replace=False)
+        lights = np.asscalar(lights)
+    
+        for lamp in range(1, lights):
+            lamp_types = ['POINT', 'SPOT', 'HEMI', 'AREA']
+            lamp_type = Rchoice(lamp_types)
+            print('lamp_type: ', lamp_type)
+            lamp_name = 'light_' + str(lamp)
+            print('lamp_name: ', lamp_name)
+            lamp_position = ((random()*5.0-2.5), (random()*5.0-2.5), (random()*2.0+1.0))
+            print('lamp_position: ', lamp_position)
+            lamp_data = bpy.data.lamps.new(name=lamp_name, type=lamp_type)
+            lamp_object = bpy.data.objects.new(name=lamp_name, object_data=lamp_data)
+            scene.objects.link(lamp_object)
+            lamp_object.location = lamp_position
+            lamp_object.select = True
+            #scene.objects.active = lamp_object
 
         mask = cv2.imread(maskfile)
 
