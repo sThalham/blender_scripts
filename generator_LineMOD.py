@@ -122,7 +122,8 @@ def getVisibleBoundingBox(objectPassIndex):
 
 #base_dir = "/home/sthalham/data/LINEMOD/models_stl_red_13"
 base_dir = "/home/sthalham/data/Meshes/linemod_13"
-back_dir = "/home/sthalham/data/Meshes/tless_30_stl"
+back_dir = "/home/sthalham/data/Meshes/tless_30"
+back_dir2 = "/home/sthalham/data/Meshes/ycb_77"
 total_set = 1 #10000 set of scenes, each set has identical objects with varied poses to anchor pose (+-15)
 pair_set = 1 #number of pair scene for each set, 10
 sample_dir = '/home/sthalham/data/renderings/linemod_rgbd' #directory for temporary files (cam_L, cam_R, masks..~)
@@ -135,7 +136,9 @@ while isfile:
         index+=1
     else:
         isfile=False
-
+        
+back_img_path = '/home/sthalham/data/coco_test2017'
+all_backgrounds = os.listdir(back_img_path)
 
 #create dir if not exist
 #if not(os.path.exists(target_dir+"/disp")):
@@ -147,8 +150,8 @@ if not(os.path.exists(target_dir+"/depth")):
 if not(os.path.exists(target_dir+"/mask")):
     os.makedirs(target_dir+"/mask")
 
-if not(os.path.exists(target_dir+"/part")):
-    os.makedirs(target_dir+"/part")
+#if not(os.path.exists(target_dir+"/part")):
+#    os.makedirs(target_dir+"/part")
     
 if not(os.path.exists(target_dir+"/rgb")):
     os.makedirs(target_dir+"/rgb")
@@ -170,11 +173,25 @@ back_file=[]
 back_solo=[]
 for rootb, dirsb, filesb in os.walk(back_dir):
     for file in sorted(filesb):
-        if file.endswith(".stl"):
+        if file.endswith(".ply"):
              temp_fn =os.path.join(rootb, file)
              back_file.append(temp_fn)
              back_solo.append(file)
              #print(len(model_file),temp_fn)
+             
+back_file2=[]
+back_solo2=[]
+back_textures2=[]
+back_repos2=[]
+dirsb = os.listdir(back_dir2)
+for subdir in dirsb:
+    subrepo = os.path.join(back_dir2, subdir, 'google_64k')
+    plyfile = os.path.join(subrepo, 'textured.obj')
+    texturefile = os.path.join(subrepo, 'texture_map.png')
+    back_file2.append(plyfile)
+    back_solo2.append('textured.obj')
+    back_textures2.append(texturefile)
+    back_repos2.append(subrepo)
 
 # FOR BACKGROUND OBJECTS  
 
@@ -236,8 +253,16 @@ for num_set in np.arange(total_set):
     BackObjDraw = np.random.choice(np.arange(len(BackfreqObj)), BackDraw, p=BackfreqObj / len(BackObj), replace=True) 
     Back_object = np.asscalar(BackDraw)
     
+    drawBack = list(range(10,15))
+    freqBack= np.bincount(drawBack)
+    BackDraw = np.random.choice(np.arange(len(freqBack)), 1, p=freqBack / len(drawBack), replace=False)
+    BackObj = list(range(1,len(back_file2)))
+    BackfreqObj = np.bincount(BackObj)
+    BackObjDraw = np.random.choice(np.arange(len(BackfreqObj)), BackDraw, p=BackfreqObj / len(BackObj), replace=True) 
+    num_back2 = np.asscalar(BackDraw)
+    
     #real deal here
-    drawAmo = list(range(6,10))
+    drawAmo = list(range(8,10))
     freqAmo = np.bincount(drawAmo)
     AmoDraw = np.random.choice(np.arange(len(freqAmo)), 1, p=freqAmo / len(drawAmo), replace=False)
     drawObj = list(range(1,len(model_file)))
@@ -245,13 +270,12 @@ for num_set in np.arange(total_set):
     ObjDraw = np.random.choice(np.arange(len(freqObj)), AmoDraw, p=freqObj / len(drawObj), replace=True) 
     num_object = np.asscalar(AmoDraw)
     object_label =[]
-    anchor_pose = np.zeros(((Back_object + num_object),6)) #location x,y,z, euler x,y,z
+    anchor_pose = np.zeros(((Back_object + num_back2 + num_object),6)) #location x,y,z, euler x,y,z
     # real deal here
     
     idxF= list(range(len(model_file)))
     
     for i in np.arange(num_object):
-        #file_idx = randint(0,len(model_file)-1)
         file_idx = Rchoice(idxF)
         file_model = model_file[file_idx]
         solo_model = model_solo[file_idx]
@@ -261,10 +285,12 @@ for num_set in np.arange(total_set):
         obj_object = bpy.context.selected_objects[0]
         obj_object.active_material = mat
         obj_object.pass_index = i +3 # don't add?
-        draw = uniform(0, 0.3)
-        ang = uniform(0, 2*pi) -pi
-        anchor_pose[i,0] = sin(ang) * draw
-        anchor_pose[i,1] = cos(ang) * draw
+        #draw = uniform(0, 0.4)
+        #ang = uniform(0, 2*pi) -pi
+        #anchor_pose[i,0] = sin(ang) * draw
+        #anchor_pose[i,1] = cos(ang) * draw
+        anchor_pose[i,0] = random()*0.5-0.25
+        anchor_pose[i,1] = random()*0.5-0.25
         anchor_pose[i,2] =0.1 + 0.2*float(i)
         anchor_pose[i,3] = 0.0
         anchor_pose[i,4] = 0.0
@@ -277,12 +303,16 @@ for num_set in np.arange(total_set):
         file_idx = randint(0,len(back_file)-1)
         file_model = back_file[file_idx]
         solo_model = back_solo[file_idx]
-        imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=rootb)
-        #imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=root)
+        print(file_model)
+        #imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=rootb)
+        imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=rootb)
         object_label.append(file_idx + num_object)
         obj_object = bpy.context.selected_objects[0]
-        obj_object.active_material = mat_2
+        obj_object.scale = (0.001, 0.001, 0.001)
+        obj_object.active_material = mat
+        #obj_object.active_material.diffuse_color = (random(), random(), random())
         obj_object.pass_index = i+ num_object+3
+        obj_object.name = 'tless' + obj_object.name
         draw = uniform(0.3, 0.6)
         ang = uniform(0, 2*pi) -pi
         anchor_pose[i+num_object,0] = sin(ang) * draw
@@ -292,6 +322,32 @@ for num_set in np.arange(total_set):
         anchor_pose[i+num_object,3] =radians(random()*360.0) #0-360 degree
         anchor_pose[i+num_object,4] =radians(random()*360.0)
         anchor_pose[i+num_object,5] =radians(random()*360.0)
+        
+    for i in np.arange(num_back2):
+        file_idx = randint(0,len(back_file2)-1)
+        file_model = back_file2[file_idx]
+        print(file_model)
+        solo_model = back_solo2[file_idx]
+        back_root = back_repos2[file_idx]
+        #imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=back_root)
+        #imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=back_root)
+        imported_object = bpy.ops.import_scene.obj(filepath=file_model)
+        object_label.append(file_idx + num_object)
+        obj_object = bpy.context.selected_objects[0]
+        mat_obj = mat_2.copy()
+        tree_mesh = mat_obj.node_tree
+        nodes_mesh = tree_mesh.nodes
+        obj_object.active_material = mat_obj
+        image = bpy.data.images.load(filepath = back_textures2[file_idx])
+        nodes_mesh['texture_node'].image = image
+        obj_object.pass_index = i+ num_object + Back_object +3
+        draw = uniform(0.3, 0.6)
+        ang = uniform(0, 2*pi) -pi
+        anchor_pose[i+num_object+Back_object,0] = sin(ang) * draw
+        anchor_pose[i+num_object+Back_object,1] = cos(ang) * draw
+        anchor_pose[i+num_object+Back_object ,3] =radians(random()*360.0) #0-360 degree
+        anchor_pose[i+num_object+Back_object ,4] =radians(random()*360.0)
+        anchor_pose[i+num_object+Back_object ,5] =radians(random()*360.0)
  
     # FOR BACKGROUND OBJECTS 
     print("BACKGROUND IMPORTED")
@@ -322,6 +378,50 @@ for num_set in np.arange(total_set):
   
     #Define Object position&rotation
     
+    tree = bpy.context.scene.node_tree
+    nodes = tree.nodes
+    ind_obj_counter = 0
+    scene.frame_set(0)
+    for obj in scene.objects:
+        #print("position object: ", obj)
+        if obj.type == 'MESH':
+            obj_object= bpy.data.objects[obj.name]
+               
+        if obj.name[0:5] == 'Plane':
+            obj_object= bpy.data.objects[obj.name]
+            img_choice = Rchoice(all_backgrounds)
+            img_path = os.path.join(back_img_path, img_choice)
+            mat_now = obj_object.active_material
+            tree_mesh = mat_now.node_tree
+            nodes_mesh = tree_mesh.nodes
+            image = bpy.data.images.load(filepath = img_path)
+            nodes_mesh['Image Texture'].image = image
+            
+        if obj_object.pass_index>2 and obj_object.pass_index <= (num_object+2):
+            idx = obj_object.pass_index -3
+            obj_object.location.x=anchor_pose[idx,0]
+            obj_object.location.y=anchor_pose[idx,1]
+            obj_object.location.z=anchor_pose[idx,2]
+            obj_object.rotation_euler.x= anchor_pose[idx,3]
+            obj_object.rotation_euler.y= anchor_pose[idx,4]
+            obj_object.rotation_euler.z= anchor_pose[idx,5]
+
+            if obj_object.pass_index > (num_object + 2):
+                obj_object.pass_index = 0
+                
+        if obj_object.pass_index > (num_object+2):
+            idx = obj_object.pass_index -3
+            obj_object.location.x=anchor_pose[idx,0]
+            obj_object.location.y=anchor_pose[idx,1]
+            obj_object.location.z=anchor_pose[idx,2]
+            obj_object.rotation_euler.x= anchor_pose[idx,3] #anchor_pose[idx,3] + radians(random()*30.0-15.0)
+            obj_object.rotation_euler.y= anchor_pose[idx,4] #anchor_pose[idx,4] + radians(random()*30.0-15.0)
+            obj_object.rotation_euler.z= anchor_pose[idx,5]
+                 
+            if obj_object.pass_index > (num_object + 2):
+                obj_object.pass_index = 0
+    
+    
     for iii in np.arange(pair_set):
 
         tree = bpy.context.scene.node_tree
@@ -332,51 +432,60 @@ for num_set in np.arange(total_set):
             #print("position object: ", obj)
             if obj.type == 'MESH':
                 obj_object= bpy.data.objects[obj.name]
+                
+            #if obj.name[0:5] == 'Plane':
+            #    obj_object= bpy.data.objects[obj.name]
+            #    img_choice = Rchoice(all_backgrounds)
+            #    img_path = os.path.join(back_img_path, img_choice)
+            #    mat_now = obj_object.active_material
+            #    tree_mesh = mat_now.node_tree
+            #    nodes_mesh = tree_mesh.nodes
+            #    image = bpy.data.images.load(filepath = img_path)
+            #    nodes_mesh['Image Texture'].image = image
             
-            if obj_object.pass_index>2 and obj_object.pass_index <= (num_object+2):
-                idx = obj_object.pass_index -3
-                obj_object.location.x=anchor_pose[idx,0]
-                obj_object.location.y=anchor_pose[idx,1]
-                obj_object.location.z=anchor_pose[idx,2]
+            #if obj_object.pass_index>2 and obj_object.pass_index <= (num_object+2):
+            #    idx = obj_object.pass_index -3
+            #    obj_object.location.x=anchor_pose[idx,0]
+            #    obj_object.location.y=anchor_pose[idx,1]
+            #    obj_object.location.z=anchor_pose[idx,2]
                 #obj_object.rotation_euler.x= radians(random()*360.0) #anchor_pose[idx,3] + radians(random()*30.0-15.0)
                 #obj_object.rotation_euler.y= radians(random()*360.0) #anchor_pose[idx,4] + radians(random()*30.0-15.0)
-                obj_object.rotation_euler.x= anchor_pose[idx,3]
-                obj_object.rotation_euler.y= anchor_pose[idx,4]
+            #    obj_object.rotation_euler.x= anchor_pose[idx,3]
+            #    obj_object.rotation_euler.y= anchor_pose[idx,4]
                 #obj_object.rotation_euler.x= radians(random()*360.0)
                 #obj_object.rotation_euler.y= radians(random()*360.0)
-                obj_object.rotation_euler.z= radians(random()*360.0)
+            #    obj_object.rotation_euler.z= anchor_pose[idx,5]
                  
                 # assign different color
                 #rand_color = (random(), random(), random())
                 #obj_object.active_material.diffuse_color = rand_color
-                if obj_object.pass_index > (num_object + 2):
-                    obj_object.pass_index = 0
+            #    if obj_object.pass_index > (num_object + 2):
+            #        obj_object.pass_index = 0
                 
-            if obj_object.pass_index > (num_object+2):
-                idx = obj_object.pass_index -3
-                obj_object.location.x=anchor_pose[idx,0]
-                obj_object.location.y=anchor_pose[idx,1]
-                obj_object.location.z=anchor_pose[idx,2]
-                obj_object.rotation_euler.x= radians(random()*360.0) #anchor_pose[idx,3] + radians(random()*30.0-15.0)
-                obj_object.rotation_euler.y= radians(random()*360.0) #anchor_pose[idx,4] + radians(random()*30.0-15.0)
-                obj_object.rotation_euler.z= radians(random()*360.0)
+            #if obj_object.pass_index > (num_object+2):
+            #    idx = obj_object.pass_index -3
+            #    obj_object.location.x=anchor_pose[idx,0]
+            #    obj_object.location.y=anchor_pose[idx,1]
+            #    obj_object.location.z=anchor_pose[idx,2]
+            #    obj_object.rotation_euler.x= anchor_pose[idx,3] #anchor_pose[idx,3] + radians(random()*30.0-15.0)
+            #    obj_object.rotation_euler.y= anchor_pose[idx,4] #anchor_pose[idx,4] + radians(random()*30.0-15.0)
+            #    obj_object.rotation_euler.z= anchor_pose[idx,5]
                  
                 # assign different color
-                rand_color = (random(), random(), random())
-                obj_object.active_material.diffuse_color = rand_color
-                if obj_object.pass_index > (num_object + 2):
-                    obj_object.pass_index = 0
+                #rand_color = (random(), random(), random())
+                #obj_object.active_material.diffuse_color = rand_color
+            #    if obj_object.pass_index > (num_object + 2):
+            #        obj_object.pass_index = 0
               
             if obj.name == 'InvisibleCube':
-                obj_object.rotation_euler.x=radians(random()*80.0+5.0) #0~90
+                obj_object.rotation_euler.x=radians(random()*85.0+10.0) #0~90
                 obj_object.rotation_euler.y=radians(random()*90.0-45.0) #-45-45
-                #obj_object.rotation_euler.y = 0.0
-                obj_object.rotation_euler.z=radians(75.0 - random()*150.0) #0-360
+                obj_object.rotation_euler.z=radians(random()*360.0)
 
             if obj.type == 'CAMERA' and  obj.name=='cam_L':
                 obj_object = bpy.data.objects[obj.name]
                 #obj_object.location.z = random()*0.3+0.75  #1.0-2.5
-                obj_object.location.z = random()+0.8
+                obj_object.location.z = random()*0.8+0.65
                 
         print("start running physics")    
 
@@ -426,10 +535,8 @@ for num_set in np.arange(total_set):
         for nr, obj in enumerate(bpy.context.selected_objects):
             for ijui9, o_hide in enumerate(bpy.context.selected_objects):
                 o_hide.hide_render = True
-            print(obj.name)
             if obj.name[0:3] == 'obj':
                 obj.hide_render = False
-                print(obj)
                 img_name = obj.name + '.png'
                 ind_mask_file = os.path.join(sample_dir, img_name)
                 for ob in scene.objects:
@@ -462,7 +569,7 @@ for num_set in np.arange(total_set):
 
         maskfile = os.path.join(target_dir+'/mask' , 'mask.png')  # correspondence mask
         depthfile = os.path.join(target_dir+'/depth', prefix+'depth.exr') # depth image
-        partfile= os.path.join(target_dir+"/part", prefix+'part.png')   # visibility mask
+        #partfile= os.path.join(target_dir+"/part", prefix+'part.png')   # visibility mask
         rgbfile= os.path.join(target_dir+"/rgb", prefix+'rgb.png')   # rgb image
 
         for ob in scene.objects:
@@ -487,32 +594,31 @@ for num_set in np.arange(total_set):
                     link_depth = tree.links.new(node_mix.outputs["Z"], node.inputs[0])
                     node.base_path=sample_dir+'/temp/'
                   
-                    auto_file_part = os.path.join(sample_dir+'/temp/', ob.name+'0061.png')
-                    node= nodes['rgbout']
-                    node.file_slots[0].path = ob.name
-                    node_mix = nodes['Render Layers']
-                    link_part = tree.links.new(node_mix.outputs["Diffuse Color"], node.inputs[0])
-                    link_part = tree.links.new(node_mix.outputs["Image"], node.inputs[0])
-                    node.base_path=sample_dir+'/temp/'
+                    #auto_file_part = os.path.join(sample_dir+'/temp/', ob.name+'0061.png')
+                    #node= nodes['rgbout']
+                    #node.file_slots[0].path = ob.name
+                    #node_mix = nodes['Render Layers']
+                    #link_part = tree.links.new(node_mix.outputs["Diffuse Color"], node.inputs[0])
+                    #link_part = tree.links.new(node_mix.outputs["Image"], node.inputs[0])
+                    #node.base_path=sample_dir+'/temp/'
 
-                    auto_file_rgb = os.path.join(sample_dir+'/rgb/', ob.name+'0061.png')
+                    auto_file_rgb = os.path.join(sample_dir+'/temp/', ob.name+'0061.png')
                     node= nodes['rgbimage']
                     node.file_slots[0].path = ob.name
                     node_mix = nodes['Render Layers']
                     link_rgb = tree.links.new(node_mix.outputs["Diffuse Color"], node.inputs[0])
-                    #link_rgb = tree.links.new(node_mix.outputs["Image"], node.inputs[0])
-                    node.base_path=sample_dir+'/rgb/'
+                    node.base_path=sample_dir+'/temp/'
                   
                     scene.render.filepath = file_L
                     bpy.ops.render.render( write_still=True )
                     tree.links.remove(link_mask)
                     tree.links.remove(link_depth)
-                    tree.links.remove(link_part)
+                    #tree.links.remove(link_part)
                     tree.links.remove(link_rgb)
                   
                     os.rename(auto_file, maskfile)
                     os.rename(auto_file_depth, depthfile)
-                    os.rename(auto_file_part, partfile)
+                    #os.rename(auto_file_part, partfile)
                     os.rename(auto_file_rgb, rgbfile)
                     
         # randomize lights and position
@@ -541,7 +647,6 @@ for num_set in np.arange(total_set):
         minmax_vu = np.zeros((num_object,4),dtype=np.int) #min v, min u, max v, max u
         label_vu = np.zeros((mask.shape[0],mask.shape[1]),dtype=np.int8) #min v, min u, max v, max u
         colors = np.zeros((num_object,3),dtype=mask.dtype)
-        print(colors.shape)
 
         n_label=0
 
@@ -707,4 +812,29 @@ for num_set in np.arange(total_set):
                 yaml.dump(gt,f)
     
     print("Iterations done: ", num_set, "/", total_set, " done ")
+
+bpy.ops.object.select_all(action='DESELECT')
+scene = bpy.context.scene
+scene.objects.active = bpy.data.objects["template"]
+for obj in scene.objects:
+    if obj.type == 'MESH':
+        if obj.name[0:8] == 'template':
+            obj.select = False          
+        elif obj.name == 'Desk':
+            obj.select = False
+        elif obj.name[0:5] == 'Plane':
+            obj.select = False
+        elif obj.name == 'Plane':
+            obj.select = False
+        elif obj.name == 'InvisibleCube':
+            obj.select = False
+        else:
+            obj.select = True
+    if obj.name[0:6] == 'light_':
+        obj.select = True
+
+bpy.ops.object.delete()
+
 print("Relax, all good and finished")
+
+
