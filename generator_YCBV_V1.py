@@ -123,9 +123,9 @@ def getVisibleBoundingBox(objectPassIndex):
 #base_dir = "/home/sthalham/data/LINEMOD/models_stl_red_13"
 base_dir = "/home/stefan/data/Meshes/linemod_13"
 back_dir = "/home/stefan/data/Meshes/tless_30"
-back_dir2 = "/home/stefan/data/Meshes/ycb_video"
-total_set = 1 #10000 set of scenes, each set has identical objects with varied poses to anchor pose (+-15)
-pair_set = 1 #number of pair scene for each set, 10
+back_dir2 = "/home/stefan/data/Meshes/ycb_video_st"
+total_set = 5000 #10000 set of scenes, each set has identical objects with varied poses to anchor pose (+-15)
+pair_set = 5 #number of pair scene for each set, 10
 sample_dir = '/home/stefan/data/rendered_data/ycbv_rgbd' #directory for temporary files (cam_L, cam_R, masks..~)
 target_dir = '/home/stefan/data/rendered_data/ycbv_rgbd/patches'
 index=0
@@ -271,9 +271,10 @@ for num_set in np.arange(total_set):
     drawAmo = list(range(3,9))
     freqAmo = np.bincount(drawAmo)
     AmoDraw = np.random.choice(np.arange(len(freqAmo)), 1, p=freqAmo / len(drawAmo), replace=False)
-    drawObj = list(range(1,len(model_file)))
-    freqObj = np.bincount(drawObj)
-    ObjDraw = np.random.choice(np.arange(len(freqObj)), AmoDraw, p=freqObj / len(drawObj), replace=True) 
+    #drawObj = list(range(1,len(model_file)))
+    #freqObj = np.bincount(drawObj)
+    #ObjDraw = np.random.choice(np.arange(len(freqObj)), AmoDraw, p=freqObj / len(drawObj), replace=False) 
+    #print(ObjDraw)
     num_object = np.asscalar(AmoDraw)
     #num_object = 9
     
@@ -283,9 +284,12 @@ for num_set in np.arange(total_set):
     
     
     idxF= list(range(len(model_file)))
+    idxYCB= list(range(len(back_file2)))
     
     for i in np.arange(num_object):
-        file_idx = randint(0,len(back_file2)-1)
+        file_idx = np.random.choice(idxYCB, replace=False)
+        idxYCB.remove(file_idx)
+        print(file_idx)
         file_model = back_file2[file_idx]
         print(file_model)
         solo_model = back_solo2[file_idx]
@@ -295,12 +299,15 @@ for num_set in np.arange(total_set):
         object_label.append(file_idx + num_object)
         obj_object = bpy.context.selected_objects[0]
         obj_object.scale = (0.001, 0.001, 0.001)
+        #obj_object.active_material = mat
+        
         mat_obj = mat_2.copy()
         tree_mesh = mat_obj.node_tree
         nodes_mesh = tree_mesh.nodes
         obj_object.active_material = mat_obj
         image = bpy.data.images.load(filepath = back_textures2[file_idx])
         nodes_mesh['texture_node'].image = image
+        
         obj_object.pass_index = i +3
         obj_object.name = 'ycb' + obj_object.name
         #choice = sample(posesSam, 1)
