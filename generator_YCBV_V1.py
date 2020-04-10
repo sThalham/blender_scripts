@@ -178,21 +178,22 @@ for rootb, dirsb, filesb in os.walk(back_dir):
              back_file.append(temp_fn)
              back_solo.append(file)
              #print(len(model_file),temp_fn)
-             
+            
 back_file2=[]
 back_solo2=[]
 back_textures2=[]
 
 ycbrepo = os.path.join(back_dir2, 'models')
-print(ycbrepo)
-for file in os.listdir(ycbrepo):
-    if file.endswith(".ply"):
-        plyfile = os.path.join(ycbrepo, file)
-        texturefile = os.path.join(ycbrepo, file[:-4]+'.png')
-        back_file2.append(plyfile)
-        back_solo2.append(file)
-        back_textures2.append(texturefile)
+for rootc, dirsc, filesc in os.walk(ycbrepo):
+    for file in sorted(filesc):
+        if file.endswith(".ply"):
+            temp_fn = os.path.join(ycbrepo, file)
+            texturefile = os.path.join(ycbrepo, file[:-4]+'.png')
+            back_file2.append(temp_fn)
+            back_solo2.append(file)
+            back_textures2.append(texturefile)
 
+print(back_solo2)
 # FOR BACKGROUND OBJECTS  
 
 for num_set in np.arange(total_set):
@@ -296,7 +297,7 @@ for num_set in np.arange(total_set):
         #imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=back_root)
         #imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=back_root)
         imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=ycbrepo)
-        object_label.append(file_idx + num_object)
+        object_label.append(file_idx)
         obj_object = bpy.context.selected_objects[0]
         obj_object.scale = (0.001, 0.001, 0.001)
         #obj_object.active_material = mat
@@ -357,7 +358,7 @@ for num_set in np.arange(total_set):
         anchor_pose[i+num_object,0] = sin(ang) * draw
         anchor_pose[i+num_object,1] = cos(ang) * draw
         anchor_pose[i+num_object,2] =0.1 + 0.2*float(i)
-        anchor_pose[i,2] = 0.1 + random()*0.2
+        #anchor_pose[i,2] = 0.1 + random()*0.2
         anchor_pose[i+num_object,3] =radians(random()*360.0) #0-360 degree
         anchor_pose[i+num_object,4] =radians(random()*360.0)
         anchor_pose[i+num_object,5] =radians(random()*360.0)
@@ -368,7 +369,7 @@ for num_set in np.arange(total_set):
         solo_model = model_solo[file_idx]
         #imported_object = bpy.ops.import_mesh.stl(filepath=file_model, filter_glob="*.stl", files=[{"name":solo_model, "name":solo_model}], directory=root)
         imported_object = bpy.ops.import_mesh.ply(filepath=file_model, filter_glob="*.ply", files=[{"name":solo_model, "name":solo_model}], directory=root)
-        object_label.append(file_idx)
+        object_label.append(file_idx + Back_object + num_back2)
         obj_object = bpy.context.selected_objects[0]
         obj_object.active_material = mat
         obj_object.pass_index = i+ num_object + Back_object +3
@@ -378,7 +379,7 @@ for num_set in np.arange(total_set):
         anchor_pose[i+num_object+Back_object,0] = sin(ang) * draw
         anchor_pose[i+num_object+Back_object,1] = cos(ang) * draw
         anchor_pose[i+num_object+Back_object,2] =0.1 + 0.2*float(i)
-        anchor_pose[i,2] = 0.1 + random()*0.2
+        #anchor_pose[i,2] = 0.1 + random()*0.2
         anchor_pose[i+num_object+Back_object ,3] =radians(random()*360.0) #0-360 degree
         anchor_pose[i+num_object+Back_object ,4] =radians(random()*360.0)
         anchor_pose[i+num_object+Back_object ,5] =radians(random()*360.0)
